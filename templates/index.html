@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GM MINI Workbook Generator</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+</head>
+<body>
+  <main>
+    <h1>GM MINI Workbook Generator</h1>
+    <p class="intro">Creates one self-contained monthly workbook in the exact GM MINI template format. Complete the setup once, then employees use Excel offline.</p>
+    <form method="post" action="{{ url_for('generate') }}">
+      <section>
+        <h2>1. Reporting month</h2>
+        <div class="two-col compact">
+          <label>Month<select name="month">{% for number, name in months %}<option value="{{ number }}" {% if number == current_month %}selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
+          <label>Year<input type="number" name="year" value="{{ current_year }}" min="2020" max="2100" required></label>
+        </div>
+        <p class="hint">The generator creates 28, 29, 30, or 31 daily sheets automatically.</p>
+      </section>
+
+      <section>
+        <h2>2. Daily targets</h2>
+        <div class="two-col">
+          <div>{% include 'target_table.html' with context %}</div>
+          <div>
+            <table><thead><tr><th>Division</th><th>Daily target</th></tr></thead><tbody>{% for item in divisions %}<tr><td>{{ item }}</td><td><input name="division_target_{{ loop.index0 }}" type="number" min="0" step="any" value="{{ defaults.division_targets[loop.index0] }}"></td></tr>{% endfor %}</tbody></table>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>3. Current FY opening balances</h2>
+        <p class="hint">Enter cumulative loading through the final day of the month before the selected reporting month.</p>
+        {% set prefix = 'current' %}{% include 'baseline_tables.html' %}
+      </section>
+
+      <section>
+        <h2>4. Prior-year FY opening balances</h2>
+        <p class="hint">Enter cumulative loading through the equivalent prior-year month-end. These figures support FY comparison averages.</p>
+        <label>Prior-year fiscal days completed<input name="prior_fiscal_days" type="number" min="0" value="0"></label>
+        {% set prefix = 'prior' %}{% include 'baseline_tables.html' %}
+      </section>
+
+      <section>
+        <h2>5. Prior-year full-year daily averages</h2>
+        <p class="hint">These appear in the existing “Last Year Upto 31st March” column.</p>
+        {% set prefix = 'prior_full' %}{% include 'baseline_tables.html' %}
+      </section>
+
+      <section>
+        <h2>6. Prior-year daily loading</h2>
+        <p class="hint">Paste the comparable month’s values into these grids. Leave days beyond the selected month blank.</p>
+        {% set grid_prefix = 'prior_daily_commodity' %}{% set labels = commodities %}{% include 'daily_grid.html' %}
+        {% set grid_prefix = 'prior_daily_division' %}{% set labels = divisions %}{% include 'daily_grid.html' %}
+      </section>
+      <button type="submit">Generate offline workbook</button>
+    </form>
+  </main>
+</body>
+</html>

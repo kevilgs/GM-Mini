@@ -1,0 +1,2 @@
+<h3>{{ 'Commodity-wise' if grid_prefix == 'prior_daily_commodity' else 'Division-wise' }} prior-year wagons</h3>
+<div class="wide-table"><table><thead><tr><th>Item</th>{% for day in days %}<th>{{ day }}</th>{% endfor %}</tr></thead><tbody>{% for item in labels %}{% set row_index = loop.index0 %}<tr><th>{{ item }}</th>{% for day in days %}<td><input name="{{ grid_prefix }}_{{ row_index }}_{{ day }}" type="number" min="0" step="any"></td>{% endfor %}</tr>{% endfor %}</tbody></table></div>

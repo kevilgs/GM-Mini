@@ -1,0 +1,11 @@
+:root { font-family: Arial, sans-serif; color: #1f2937; background: #f3f4f6; }
+body { margin: 0; }
+main { max-width: 1180px; margin: 28px auto; padding: 28px; background: #fff; box-shadow: 0 2px 10px #0002; }
+h1 { margin-top: 0; color: #12365b; } h2 { color: #12365b; border-bottom: 1px solid #d7e0ea; padding-bottom: 7px; } h3 { margin-top: 22px; }
+section { margin: 28px 0; } .intro { max-width: 760px; } .hint { color: #4b5563; font-size: .92rem; }
+.two-col { display: grid; grid-template-columns: repeat(2, minmax(300px, 1fr)); gap: 24px; } .compact { max-width: 480px; }
+label { display: grid; gap: 5px; font-weight: bold; } input, select { font: inherit; padding: 6px; border: 1px solid #9ca3af; border-radius: 3px; }
+table { border-collapse: collapse; width: 100%; font-size: .88rem; } th, td { border: 1px solid #cbd5e1; padding: 5px; text-align: left; } thead th { background: #12365b; color: #fff; } tbody th { background: #eff6ff; } td input { width: 86px; box-sizing: border-box; }
+.wide-table { overflow-x: auto; border: 1px solid #cbd5e1; } .wide-table table { min-width: 2440px; } .wide-table td { padding: 2px; } .wide-table td input { width: 70px; border: 0; border-radius: 0; }
+button, .button { display: inline-block; background: #0f766e; color: white; border: 0; border-radius: 4px; padding: 12px 18px; font-weight: bold; text-decoration: none; cursor: pointer; }
+button:hover, .button:hover { background: #115e59; } @media (max-width: 760px) { .two-col { grid-template-columns: 1fr; } main { margin: 0; box-shadow: none; } }

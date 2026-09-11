@@ -1,0 +1,1 @@
+<table><thead><tr><th>Commodity</th><th>Daily target</th></tr></thead><tbody>{% for item in commodities %}<tr><td>{{ item }}</td><td><input name="commodity_target_{{ loop.index0 }}" type="number" min="0" step="any" value="{{ defaults.commodity_targets[loop.index0] }}"></td></tr>{% endfor %}</tbody></table>
