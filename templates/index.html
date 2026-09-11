@@ -3,60 +3,227 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>GM MINI Workbook Generator</title>
+  <title>GM MINI Monthly Workbook Generator</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
 </head>
 <body>
-  <main>
-    <h1>GM MINI Workbook Generator</h1>
-    <p class="intro">Creates one self-contained monthly workbook in the exact GM MINI template format. Complete the setup once, then employees use Excel offline.</p>
-    <form method="post" action="{{ url_for('generate') }}">
-      <section>
-        <h2>1. Reporting month</h2>
-        <div class="two-col compact">
-          <label>Month<select name="month">{% for number, name in months %}<option value="{{ number }}" {% if number == current_month %}selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
-          <label>Year<input type="number" name="year" value="{{ current_year }}" min="2020" max="2100" required></label>
-        </div>
-        <p class="hint">The generator creates 28, 29, 30, or 31 daily sheets automatically.</p>
-      </section>
+  <header>
+    <h1>GM MINI Monthly Workbook Generator</h1>
+  </header>
 
-      <section>
-        <h2>2. Daily targets</h2>
-        <div class="two-col">
-          <div>{% include 'target_table.html' with context %}</div>
-          <div>
-            <table><thead><tr><th>Division</th><th>Daily target</th></tr></thead><tbody>{% for item in divisions %}<tr><td>{{ item }}</td><td><input name="division_target_{{ loop.index0 }}" type="number" min="0" step="any" value="{{ defaults.division_targets[loop.index0] }}"></td></tr>{% endfor %}</tbody></table>
+  <div class="step-indicator">
+    <ol>
+      <li class="step-item current-step" data-step="1"><span class="step-number">1</span>Month & Targets</li>
+      <li class="step-item" data-step="2"><span class="step-number">2</span>Current FY</li>
+      <li class="step-item" data-step="3"><span class="step-number">3</span>Prior FY</li>
+      <li class="step-item" data-step="4"><span class="step-number">4</span>Prior Year Averages</li>
+      <li class="step-item" data-step="5"><span class="step-number">5</span>Prior Daily Loading</li>
+    </ol>
+  </div>
+
+  <main>
+    <div class="container">
+      <form method="post" action="{{ url_for('generate') }}" id="wizardForm">
+        <!-- Step 1 -->
+        <div class="wizard-step active" data-step="1">
+          <h2>Step 1 of 5: Reporting Month & Daily Targets</h2>
+          
+          <div class="form-group compact">
+            <div class="two-col" style="margin-top: 0;">
+              <div>
+                <label for="monthSelect">Reporting Month</label>
+                <select name="month" id="monthSelect">
+                  {% for number, name in months %}
+                    <option value="{{ number }}" {% if number == current_month %}selected{% endif %}>{{ name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div>
+                <label for="yearInput">Reporting Year</label>
+                <input type="number" name="year" id="yearInput" value="{{ current_year }}" min="2020" max="2100" required>
+              </div>
+            </div>
+          </div>
+          <p class="hint">The generator creates 28, 29, 30, or 31 daily sheets automatically based on your selected month.</p>
+
+          <h3 style="margin-top: 2rem;">Daily Targets</h3>
+          <div class="two-col">
+            <div>
+              <p class="hint">Commodity daily wagon targets:</p>
+              {% include 'target_table.html' with context %}
+            </div>
+            <div>
+              <p class="hint">Division daily wagon targets:</p>
+              <table>
+                <thead>
+                  <tr><th>Division</th><th>Daily target</th></tr>
+                </thead>
+                <tbody>
+                  {% for item in divisions %}
+                    <tr>
+                      <td><strong>{{ item }}</strong></td>
+                      <td><input name="division_target_{{ loop.index0 }}" type="number" min="0" step="any" value="{{ defaults.division_targets[loop.index0] }}"></td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="wizard-nav">
+            <button type="button" class="btn btn-primary btn-next">Next Step &rarr;</button>
           </div>
         </div>
-      </section>
 
-      <section>
-        <h2>3. Current FY opening balances</h2>
-        <p class="hint">Enter cumulative loading through the final day of the month before the selected reporting month.</p>
-        {% set prefix = 'current' %}{% include 'baseline_tables.html' %}
-      </section>
+        <!-- Step 2 -->
+        <div class="wizard-step" data-step="2" style="display:none;">
+          <h2>Step 2 of 5: Current FY Opening Balances</h2>
+          <p class="hint">Enter cumulative loading through the final day of the month before the selected reporting month.</p>
+          
+          {% set prefix = 'current' %}
+          {% include 'baseline_tables.html' %}
 
-      <section>
-        <h2>4. Prior-year FY opening balances</h2>
-        <p class="hint">Enter cumulative loading through the equivalent prior-year month-end. These figures support FY comparison averages.</p>
-        <label>Prior-year fiscal days completed<input name="prior_fiscal_days" type="number" min="0" value="0"></label>
-        {% set prefix = 'prior' %}{% include 'baseline_tables.html' %}
-      </section>
+          <div class="wizard-nav">
+            <button type="button" class="btn btn-secondary btn-prev">&larr; Previous</button>
+            <button type="button" class="btn btn-primary btn-next">Next Step &rarr;</button>
+          </div>
+        </div>
 
-      <section>
-        <h2>5. Prior-year full-year daily averages</h2>
-        <p class="hint">These appear in the existing “Last Year Upto 31st March” column.</p>
-        {% set prefix = 'prior_full' %}{% include 'baseline_tables.html' %}
-      </section>
+        <!-- Step 3 -->
+        <div class="wizard-step" data-step="3" style="display:none;">
+          <h2>Step 3 of 5: Prior-Year FY Opening Balances</h2>
+          <p class="hint">Enter cumulative loading through the equivalent prior-year month-end. These figures support FY comparison averages.</p>
+          
+          <div class="form-group compact" style="margin-bottom: 1.5rem;">
+            <label for="priorFiscalDays">Prior-year fiscal days completed</label>
+            <input name="prior_fiscal_days" id="priorFiscalDays" type="number" min="0" value="0">
+          </div>
 
-      <section>
-        <h2>6. Prior-year daily loading</h2>
-        <p class="hint">Paste the comparable month’s values into these grids. Leave days beyond the selected month blank.</p>
-        {% set grid_prefix = 'prior_daily_commodity' %}{% set labels = commodities %}{% include 'daily_grid.html' %}
-        {% set grid_prefix = 'prior_daily_division' %}{% set labels = divisions %}{% include 'daily_grid.html' %}
-      </section>
-      <button type="submit">Generate offline workbook</button>
-    </form>
+          {% set prefix = 'prior' %}
+          {% include 'baseline_tables.html' %}
+
+          <div class="wizard-nav">
+            <button type="button" class="btn btn-secondary btn-prev">&larr; Previous</button>
+            <button type="button" class="btn btn-primary btn-next">Next Step &rarr;</button>
+          </div>
+        </div>
+
+        <!-- Step 4 -->
+        <div class="wizard-step" data-step="4" style="display:none;">
+          <h2>Step 4 of 5: Prior-Year Full-Year Daily Averages</h2>
+          <p class="hint">These appear in the existing “Last Year Upto 31st March” column.</p>
+          
+          {% set prefix = 'prior_full' %}
+          {% include 'baseline_tables.html' %}
+
+          <div class="wizard-nav">
+            <button type="button" class="btn btn-secondary btn-prev">&larr; Previous</button>
+            <button type="button" class="btn btn-primary btn-next">Next Step &rarr;</button>
+          </div>
+        </div>
+
+        <!-- Step 5 -->
+        <div class="wizard-step" data-step="5" style="display:none;">
+          <h2>Step 5 of 5: Prior-Year Daily Loading</h2>
+          <p class="hint">Paste the comparable month’s values into these grids. Leave days beyond the selected month blank.</p>
+          
+          {% set grid_prefix = 'prior_daily_commodity' %}{% set labels = commodities %}{% include 'daily_grid.html' %}
+          {% set grid_prefix = 'prior_daily_division' %}{% set labels = divisions %}{% include 'daily_grid.html' %}
+
+          <div class="wizard-nav">
+            <button type="button" class="btn btn-secondary btn-prev">&larr; Previous</button>
+            <button type="submit" class="btn btn-success generate-btn" id="generateBtn">
+              <span class="loading" id="generateSpinner" style="display:none;"></span>
+              Generate Offline Workbook
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
   </main>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", function() {
+        let currentStep = 1;
+        const totalSteps = 5;
+        const form = document.getElementById('wizardForm');
+        const generateBtn = document.getElementById('generateBtn');
+        const generateSpinner = document.getElementById('generateSpinner');
+
+        function showStep(step) {
+            document.querySelectorAll('.wizard-step').forEach(el => {
+                el.style.display = 'none';
+                el.classList.remove('active');
+            });
+            const activeStep = document.querySelector(`.wizard-step[data-step="${step}"]`);
+            if (activeStep) {
+                activeStep.style.display = 'block';
+                void activeStep.offsetWidth;
+                activeStep.classList.add('active');
+            }
+
+            document.querySelectorAll('.step-item').forEach(el => {
+                const s = parseInt(el.dataset.step);
+                el.classList.remove('current-step', 'completed');
+                if (s === step) {
+                    el.classList.add('current-step');
+                } else if (s < step) {
+                    el.classList.add('completed');
+                }
+            });
+        }
+
+        document.querySelectorAll('.btn-next').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const currentStepEl = document.querySelector(`.wizard-step[data-step="${currentStep}"]`);
+                const inputs = currentStepEl.querySelectorAll('input, select');
+                let valid = true;
+                for (let input of inputs) {
+                    if (!input.checkValidity()) {
+                        input.reportValidity();
+                        valid = false;
+                        break;
+                    }
+                }
+                
+                if (valid && currentStep < totalSteps) {
+                    currentStep++;
+                    showStep(currentStep);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+            });
+        });
+
+        document.querySelectorAll('.btn-prev').forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (currentStep > 1) {
+                    currentStep--;
+                    showStep(currentStep);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+            });
+        });
+        
+        document.querySelectorAll('.step-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const targetStep = parseInt(item.dataset.step);
+                currentStep = targetStep;
+                showStep(currentStep);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            });
+        });
+
+        form.addEventListener('submit', function() {
+            if (generateSpinner) {
+                generateSpinner.style.display = 'inline-block';
+            }
+            if (generateBtn) {
+                generateBtn.classList.add('disabled');
+            }
+        });
+
+        showStep(currentStep);
+    });
+  </script>
 </body>
 </html>

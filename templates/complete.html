@@ -1,1 +1,41 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Workbook ready</title><link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}"></head><body><main><h1>Workbook ready</h1><p>Created {{ days }} daily sheets plus the original-format LINK sheet. Open it in Microsoft Excel with calculation set to Automatic.</p><p><a class="button" href="{{ url_for('download', filename=filename) }}">Download {{ filename }}</a></p><p><a href="{{ url_for('index') }}">Create another workbook</a></p></main></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Workbook Ready - GM MINI Generator</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+</head>
+<body>
+  <header>
+    <h1>GM MINI Monthly Workbook Generator</h1>
+  </header>
+
+  <main>
+    <div class="container">
+      <div class="message success">
+        <h2>Workbook Ready!</h2>
+        <p>Created {{ days }} daily sheets plus the original-format LINK sheet.</p>
+      </div>
+
+      <div class="instructions">
+        <h3>Usage Instructions:</h3>
+        <ul>
+          <li>Open the generated workbook in Microsoft Excel.</li>
+          <li>Ensure calculation is set to <strong>Automatic</strong>.</li>
+          <li>All formulas, links, and cross-sheet aggregations are fully connected.</li>
+        </ul>
+      </div>
+
+      <div style="margin-top: 2rem; display: flex; gap: 1rem; align-items: center;">
+        <a class="btn btn-success" href="{{ url_for('download', filename=filename) }}">
+          Download {{ filename }}
+        </a>
+        <a class="btn btn-secondary" href="{{ url_for('index') }}">
+          Create Another Workbook
+        </a>
+      </div>
+    </div>
+  </main>
+</body>
+</html>
