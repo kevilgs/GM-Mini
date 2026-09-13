@@ -2,3 +2,6 @@
 /vendor
 run_generator.bat
 credentials.json
+client_secret.json
+token.json
+generated_workbooks/

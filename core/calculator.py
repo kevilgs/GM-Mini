@@ -1,4 +1,4 @@
-from core.gsheets_db import GSheetsDB, COMMODITY_ROWS, DIVISION_ROWS, MONTH_DAYS
+from core.gsheets_db import GSheetsDB, COMMODITIES, DIVISIONS, MONTH_DAYS
 import datetime
 
 class Calculator:
@@ -20,7 +20,7 @@ class Calculator:
         
         fiscal_day_count = self._get_fiscal_day_count(month, day)
         
-        for category, items in [('commodity', COMMODITY_ROWS.keys()), ('division', DIVISION_ROWS.keys())]:
+        for category, items in [('commodity', COMMODITIES), ('division', DIVISIONS)]:
             for name in items:
                 # 1. Inputs
                 input_data = daily_input.get(name, {'rakes': 0.0, 'wagons': 0.0})

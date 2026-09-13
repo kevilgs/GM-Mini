@@ -1,9 +1,11 @@
 import os
 import datetime
-from flask import Flask, render_template, request, send_file, flash, redirect, url_for, jsonify
-from core.gsheets_db import GSheetsDB, COMMODITY_ROWS, DIVISION_ROWS
+from flask import Flask, render_template, request, jsonify, send_file, flash, redirect, url_for
 from core.calculator import Calculator
+from core.gsheets_db import GSheetsDB, COMMODITIES, DIVISIONS
 from core.generator import generate_daily_excel
+from core.drive_api import upload_excel_to_drive
+from googleapiclient.errors import HttpError
 
 app = Flask(__name__)
 app.secret_key = 'super_secret_key'
@@ -14,8 +16,8 @@ calc = Calculator(db)
 @app.route('/', methods=['GET'])
 def index():
     return render_template('index.html', 
-                           commodities=COMMODITY_ROWS.keys(),
-                           divisions=DIVISION_ROWS.keys())
+                           commodities=COMMODITIES,
+                           divisions=DIVISIONS)
 
 @app.route('/api/check_date', methods=['POST'])
 def check_date():
@@ -82,7 +84,7 @@ def generate():
         
         # Build daily input dictionary from form data
         daily_input = {}
-        for name in list(COMMODITY_ROWS.keys()) + list(DIVISION_ROWS.keys()):
+        for name in COMMODITIES + DIVISIONS:
             rakes_val = request.form.get(f"{name}_rakes", "0")
             wagons_val = request.form.get(f"{name}_wagons", "0")
             
@@ -127,12 +129,28 @@ def generate():
         # 3. Generate Excel
         output_file = generate_daily_excel(month, year, day, report_data)
         
-        return send_file(output_file, as_attachment=True)
+        # 4. Upload to Google Drive
+        month_name = datetime.date(year, month, 1).strftime('%B-%Y')
+        filename = f"{day:02d}-{month:02d}-{year}.xlsx"
         
+        link = upload_excel_to_drive(output_file, filename, current_year_tab, month_name)
+        
+        flash(f"Success! Excel report for {day:02d}-{month:02d}-{year} has been generated and uploaded to Google Drive. <br><a href='{link}' target='_blank' style='color: var(--color-success); text-decoration: underline;'>Click here to view it.</a>", "success")
+        return redirect(url_for('index'))
+        
+    except HttpError as e:
+        import traceback
+        traceback.print_exc()
+        error_details = e.error_details[0] if getattr(e, 'error_details', None) and len(e.error_details) > 0 else {}
+        if error_details.get('reason') == 'storageQuotaExceeded':
+            flash("Error: The service account has run out of storage space. This usually happens if it created the 'GM-MINI SHEETS' folder itself. Please delete any 'GM-MINI SHEETS' folders, then create one in your personal Google Drive and share it with the service account as an Editor.", "error")
+        else:
+            flash(f"Google Drive API Error: {str(e)}", "error")
+        return redirect(url_for('index'))
     except Exception as e:
         import traceback
         traceback.print_exc()
-        flash(f"Error: {str(e)}")
+        flash(f"Error: {str(e)}", "error")
         return redirect(url_for('index'))
 
 if __name__ == '__main__':

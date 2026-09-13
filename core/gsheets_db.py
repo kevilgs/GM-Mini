@@ -1,17 +1,18 @@
 import gspread
 from google.oauth2.service_account import Credentials
-import pandas as pd
 import datetime
 
-# Define constants for row mappings (0-indexed in python list)
-COMMODITY_ROWS = {
-    'CEMT': 2, 'COAL': 3, 'CONT': 4, 'FERT': 5, 'IMFT': 6, 'POL': 7, 
-    'SALT': 8, 'STEEL': 9, 'DOC': 10, 'FG': 11, 'CHEM': 12, 'AUTO': 13, 'OTHERS': 14
+# Define column indices for the new 1-row-per-day layout (0-indexed in python list)
+# Date is 0
+CATEGORY_COLS = {
+    'CEMT': 1, 'COAL': 2, 'CONT': 3, 'FERT': 4, 'IMFT': 5, 'POL': 6, 
+    'SALT': 7, 'STEEL': 8, 'DOC': 9, 'FG': 10, 'CHEM': 11, 'AUTO': 12, 'OTHERS': 13,
+    # 14 is empty separator
+    'ADI': 15, 'GIMB': 16, 'BCT': 17, 'BRC': 18, 'RJT': 19, 'BVP': 20, 'RTM': 21
 }
 
-DIVISION_ROWS = {
-    'ADI': 18, 'GIMB': 19, 'BCT': 20, 'BRC': 21, 'RJT': 22, 'BVP': 23, 'RTM': 24
-}
+COMMODITIES = ['CEMT', 'COAL', 'CONT', 'FERT', 'IMFT', 'POL', 'SALT', 'STEEL', 'DOC', 'FG', 'CHEM', 'AUTO', 'OTHERS']
+DIVISIONS = ['ADI', 'GIMB', 'BCT', 'BRC', 'RJT', 'BVP', 'RTM']
 
 # The number of days in each month
 MONTH_DAYS = {
@@ -27,94 +28,144 @@ class GSheetsDB:
         self._cache = {}
         
     def _get_worksheet_data(self, fy_tab, bypass_cache=False):
-        """Fetches the entire worksheet as a 2D list with caching"""
+        """Fetches the entire worksheet as a 2D list with caching, automatically creating it if missing."""
         if fy_tab not in self._cache or bypass_cache:
-            worksheet = self.spreadsheet.worksheet(fy_tab)
+            try:
+                worksheet = self.spreadsheet.worksheet(fy_tab)
+            except gspread.exceptions.WorksheetNotFound:
+                print(f"Tab {fy_tab} not found. Creating automatically...")
+                worksheet = self._create_and_format_worksheet(fy_tab)
+            
             self._cache[fy_tab] = worksheet.get_all_values()
         return self._cache[fy_tab]
         
-    def _get_year_for_month(self, fy_tab: str, month: int) -> int:
-        start_year = int(fy_tab.split('-')[0].replace("FY ", ""))
-        return start_year if month >= 4 else start_year + 1
+    def _create_and_format_worksheet(self, fy_tab):
+        """Internal helper to create a new FY tab and apply the strict 22-column layout."""
+        ws = self.spreadsheet.add_worksheet(title=fy_tab, rows="500", cols="22")
+        
+        header = [
+            'Date', 
+            'CEMT', 'COAL', 'CONT', 'FERT', 'IMFT', 'POL', 'SALT', 'STEEL', 'DOC', 'FG', 'CHEM', 'AUTO', 'OTHERS',
+            '', 
+            'ADI', 'GIMB', 'BCT', 'BRC', 'RJT', 'BVP', 'RTM'
+        ]
+        ws.update('A1:V1', [header])
+        
+        requests = []
+        sheet_id = ws.id
+        
+        requests.append({
+            'repeatCell': {
+                'range': {'sheetId': sheet_id, 'startRowIndex': 0, 'endRowIndex': 1, 'startColumnIndex': 0, 'endColumnIndex': 22},
+                'cell': {
+                    'userEnteredFormat': {
+                        'textFormat': {'bold': True},
+                        'backgroundColor': {'red': 0.9, 'green': 0.9, 'blue': 0.9},
+                        'horizontalAlignment': 'CENTER',
+                        'verticalAlignment': 'MIDDLE',
+                        'borders': {
+                            'bottom': {'style': 'SOLID'}, 'top': {'style': 'SOLID'}, 'left': {'style': 'SOLID'}, 'right': {'style': 'SOLID'}
+                        }
+                    }
+                },
+                'fields': 'userEnteredFormat(textFormat,backgroundColor,horizontalAlignment,verticalAlignment,borders)'
+            }
+        })
+        
+        requests.append({
+            'repeatCell': {
+                'range': {'sheetId': sheet_id, 'startRowIndex': 1, 'endRowIndex': 500, 'startColumnIndex': 0, 'endColumnIndex': 1},
+                'cell': {'userEnteredFormat': {'textFormat': {'bold': True}, 'horizontalAlignment': 'CENTER', 'verticalAlignment': 'MIDDLE'}},
+                'fields': 'userEnteredFormat(textFormat,horizontalAlignment,verticalAlignment)'
+            }
+        })
+
+        requests.append({
+            'repeatCell': {
+                'range': {'sheetId': sheet_id, 'startRowIndex': 1, 'endRowIndex': 500, 'startColumnIndex': 1, 'endColumnIndex': 22},
+                'cell': {'userEnteredFormat': {'horizontalAlignment': 'CENTER', 'verticalAlignment': 'MIDDLE'}},
+                'fields': 'userEnteredFormat(horizontalAlignment,verticalAlignment)'
+            }
+        })
+
+        requests.append({
+            'updateSheetProperties': {
+                'properties': {'sheetId': sheet_id, 'gridProperties': {'frozenRowCount': 1, 'frozenColumnCount': 1}},
+                'fields': 'gridProperties(frozenRowCount,frozenColumnCount)'
+            }
+        })
+
+        requests.append({
+            'updateDimensionProperties': {
+                'range': {'sheetId': sheet_id, 'dimension': 'COLUMNS', 'startIndex': 14, 'endIndex': 15},
+                'properties': {'pixelSize': 30},
+                'fields': 'pixelSize'
+            }
+        })
+
+        requests.append({
+            'deleteDimension': {
+                'range': {'sheetId': sheet_id, 'dimension': 'COLUMNS', 'startIndex': 22}
+            }
+        })
+
+        self.spreadsheet.batch_update({'requests': requests})
+        return ws
+        
+    def _get_row_for_date(self, data, target_date_str):
+        # target_date_str is DD-MM-YYYY
+        for row_idx in range(1, len(data)):
+            if data[row_idx] and data[row_idx][0] == target_date_str:
+                return row_idx
+        return -1
         
     def get_wagon_count(self, fy_tab, category, name, month, day):
-        """
-        Gets the wagon count for a specific date from the 419-column grid.
-        Category: 'commodity' or 'division'
-        Name: e.g. 'CEMT' or 'ADI'
-        Month: 4 (April) to 3 (March)
-        Day: 1 to 31
-        """
         data = self._get_worksheet_data(fy_tab)
         
-        row_idx = COMMODITY_ROWS[name] if category == 'commodity' else DIVISION_ROWS[name]
+        # Convert month, day to DD-MM-YYYY
+        start_year = int(fy_tab.split('-')[0].replace("FY ", ""))
+        year = start_year if month >= 4 else start_year + 1
+        date_str = f"{day:02d}-{month:02d}-{year}"
         
-        # The layout repeats month blocks.
-        # Format for a month block:
-        # Col N: 'YYYY-MM-01' (empty data)
-        # Col N+1: 'Head'
-        # Col N+2: 'YYYY-MM-01' (Day 1 data)
-        # Col N+3: 'YYYY-MM-02' (Day 2 data)
-        # Therefore, for Day D, the column is (Col N+1) + D
-        
-        year = self._get_year_for_month(fy_tab, month)
-        month_str = f"{year}-{month:02d}-01"
-        
-        head_col = -1
-        for i in range(len(data[0]) - 1):
-            if data[0][i] == month_str and data[0][i+1] == "Head":
-                head_col = i + 1
-                break
-                
-        if head_col == -1:
+        row_idx = self._get_row_for_date(data, date_str)
+        if row_idx == -1:
             return 0.0
             
-        target_col = head_col + day
-        
-        val = data[row_idx][target_col]
-        try:
-            return float(val) if val != "" else 0.0
-        except ValueError:
-            return 0.0
-            
-    def get_month_sum(self, fy_tab, category, name, month, up_to_day=None):
-        """
-        Calculates the sum of wagons for a given month.
-        If up_to_day is provided, it calculates MTD (Month to Date).
-        """
-        data = self._get_worksheet_data(fy_tab)
-        row_idx = COMMODITY_ROWS[name] if category == 'commodity' else DIVISION_ROWS[name]
-        
-        year = self._get_year_for_month(fy_tab, month)
-        month_str = f"{year}-{month:02d}-01"
-        
-        head_col = -1
-        for i in range(len(data[0]) - 1):
-            if data[0][i] == month_str and data[0][i+1] == "Head":
-                head_col = i + 1
-                break
-                
-        if head_col == -1:
-            return 0.0
-            
-        max_days = MONTH_DAYS[month]
-        end_day = up_to_day if up_to_day is not None else max_days
-        
-        total = 0.0
-        for d in range(1, end_day + 1):
-            col = head_col + d
-            val = data[row_idx][col]
+        col_idx = CATEGORY_COLS[name]
+        if col_idx < len(data[row_idx]):
+            val = data[row_idx][col_idx].strip()
             try:
-                total += float(val) if val != "" else 0.0
+                return float(val) if val != "" else 0.0
             except ValueError:
-                pass
+                return 0.0
+        return 0.0
+        
+    def get_month_sum(self, fy_tab, category, name, month, up_to_day=None):
+        data = self._get_worksheet_data(fy_tab)
+        start_year = int(fy_tab.split('-')[0].replace("FY ", ""))
+        year = start_year if month >= 4 else start_year + 1
+        
+        col_idx = CATEGORY_COLS[name]
+        total = 0.0
+        
+        for row in data[1:]:
+            if not row or not row[0]:
+                continue
+            date_str = row[0]
+            try:
+                d = datetime.datetime.strptime(date_str, '%d-%m-%Y')
+                if d.year == year and d.month == month:
+                    if up_to_day is None or d.day <= up_to_day:
+                        if col_idx < len(row):
+                            val = row[col_idx].strip()
+                            if val:
+                                total += float(val)
+            except ValueError:
+                continue
                 
         return total
         
     def get_fy_progressive_sum(self, fy_tab, category, name, current_month, current_day):
-        """
-        Calculates total wagons from April 1st up to the given month and day.
-        """
         months_order = [4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3]
         total = 0.0
         
@@ -128,84 +179,52 @@ class GSheetsDB:
         return total
 
     def get_last_filled_date(self, fy_tab):
-        """
-        Scans the database columns from right to left to find the latest date
-        that has non-empty values in the data rows.
-        """
         data = self._get_worksheet_data(fy_tab)
         
-        # Iterate columns backwards, skipping the last column (which is TOTAL usually)
-        for col in range(len(data[0]) - 1, 1, -1):
-            header = data[0][col].strip()
-            # Check if header is a valid date string YYYY-MM-DD
-            if header and len(header) == 10 and header.count('-') == 2:
-                # Ensure it's not a month block header (which has 'Head' in the next col)
-                if col < len(data[0]) - 1 and data[0][col+1] == "Head":
+        # Start from the bottom up to find the last valid date
+        for row_idx in range(len(data)-1, 0, -1):
+            if data[row_idx] and data[row_idx][0]:
+                date_str = data[row_idx][0].strip()
+                try:
+                    return datetime.datetime.strptime(date_str, '%d-%m-%Y').date()
+                except ValueError:
                     continue
-                
-                # Check if any data row has values
-                has_data = False
-                for r in list(range(2, 15)) + list(range(18, 25)):
-                    if r < len(data) and col < len(data[r]) and data[r][col].strip() != "":
-                        has_data = True
-                        break
-                
-                if has_data:
-                    return datetime.datetime.strptime(header, "%Y-%m-%d").date()
-                    
         return None
 
     def save_daily_batch(self, fy_tab, month, day, daily_input):
-        """
-        daily_input: dict mapping name to {'wagons': W, 'rakes': R}
-        Updates all commodities (rows 2-14) and divisions (rows 18-24) in 2 API calls.
-        """
         data = self._get_worksheet_data(fy_tab)
         worksheet = self.spreadsheet.worksheet(fy_tab)
         
-        year = self._get_year_for_month(fy_tab, month)
-        month_str = f"{year}-{month:02d}-01"
+        start_year = int(fy_tab.split('-')[0].replace("FY ", ""))
+        year = start_year if month >= 4 else start_year + 1
+        date_str = f"{day:02d}-{month:02d}-{year}"
         
-        head_col = -1
-        for i in range(len(data[0]) - 1):
-            if data[0][i] == month_str and data[0][i+1] == "Head":
-                head_col = i + 1
-                break
-                
-        if head_col == -1:
-            print(f"Error: Could not find column for month {month}")
-            return False
-            
-        target_col = head_col + day
-        col_letter = gspread.utils.rowcol_to_a1(1, target_col + 1)[0:-1]
+        # Prepare the new row array (22 columns)
+        new_row = ["" for _ in range(22)]
+        new_row[0] = date_str
         
-        # Prepare commodity column vector (Rows 3 to 15, index 2 to 14)
-        comm_vals = []
-        for name in COMMODITY_ROWS.keys():
-            w = daily_input.get(name, {}).get('wagons', "")
-            comm_vals.append([w])
+        for name, col_idx in CATEGORY_COLS.items():
+            w = daily_input.get(name, {}).get('wagons', "0")
+            if w == "":
+                w = "0"
+            new_row[col_idx] = str(w)
             
-        # Prepare division column vector (Rows 19 to 25, index 18 to 24)
-        div_vals = []
-        for name in DIVISION_ROWS.keys():
-            w = daily_input.get(name, {}).get('wagons', "")
-            div_vals.append([w])
-            
-        # Update commodities
-        worksheet.update(f"{col_letter}3:{col_letter}15", comm_vals)
-        # Update divisions
-        worksheet.update(f"{col_letter}19:{col_letter}25", div_vals)
+        row_idx = self._get_row_for_date(data, date_str)
         
+        if row_idx == -1:
+            # Find the first truly empty row
+            sheet_row = len(data) + 1
+            for i, row in enumerate(data):
+                # Skip header row (0)
+                if i > 0 and not any(str(cell).strip() for cell in row):
+                    sheet_row = i + 1
+                    break
+            worksheet.update(values=[new_row], range_name=f"A{sheet_row}:V{sheet_row}")
+        else:
+            # Update existing row
+            # gspread rowcol_to_a1 uses 1-indexed values
+            sheet_row = row_idx + 1
+            worksheet.update(values=[new_row], range_name=f"A{sheet_row}:V{sheet_row}")
+            
         self._cache.pop(fy_tab, None)
         return True
-
-if __name__ == "__main__":
-    db = GSheetsDB()
-    # Quick Test
-    print("Testing read CEMT for August 1, 2025...")
-    val = db.get_wagon_count("FY 2025-26", "commodity", "CEMT", 8, 1)
-    print(f"August 1 CEMT: {val}")
-    
-    print("Testing MTD sum for CEMT up to August 5...")
-    mtd = db.get_month_sum("FY 2025-26", "commodity", "CEMT", 8, 5)
-    print(f"August 1-5 MTD CEMT: {mtd}")
