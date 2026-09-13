@@ -1,4 +1,0 @@
-<div class="two-col">
-  <table><thead><tr><th>Commodity</th><th>Wagons</th></tr></thead><tbody>{% for item in commodities %}<tr><td>{{ item }}</td><td><input name="{{ prefix }}_commodity_{{ loop.index0 }}" type="number" step="any" value="{{ defaults.current_baseline_commodities[loop.index0] if prefix == 'current' else (defaults.prior_full_year_commodities[loop.index0] if prefix == 'prior_full' else 0) }}"></td></tr>{% endfor %}</tbody></table>
-  <table><thead><tr><th>Division</th><th>Wagons</th></tr></thead><tbody>{% for item in divisions %}<tr><td>{{ item }}</td><td><input name="{{ prefix }}_division_{{ loop.index0 }}" type="number" step="any" value="{{ defaults.current_baseline_divisions[loop.index0] if prefix == 'current' else (defaults.prior_full_year_divisions[loop.index0] if prefix == 'prior_full' else 0) }}"></td></tr>{% endfor %}</tbody></table>
-</div>

@@ -1,229 +1,373 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>GM MINI Monthly Workbook Generator</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
-</head>
-<body>
-  <header>
-    <h1>GM MINI Monthly Workbook Generator</h1>
-  </header>
-
-  <div class="step-indicator">
-    <ol>
-      <li class="step-item current-step" data-step="1"><span class="step-number">1</span>Month & Targets</li>
-      <li class="step-item" data-step="2"><span class="step-number">2</span>Current FY</li>
-      <li class="step-item" data-step="3"><span class="step-number">3</span>Prior FY</li>
-      <li class="step-item" data-step="4"><span class="step-number">4</span>Prior Year Averages</li>
-      <li class="step-item" data-step="5"><span class="step-number">5</span>Prior Daily Loading</li>
-    </ol>
-  </div>
-
-  <main>
-    <div class="container">
-      <form method="post" action="{{ url_for('generate') }}" id="wizardForm">
-        <!-- Step 1 -->
-        <div class="wizard-step active" data-step="1">
-          <h2>Step 1 of 5: Reporting Month & Daily Targets</h2>
-          
-          <div class="form-group compact">
-            <div class="two-col" style="margin-top: 0;">
-              <div>
-                <label for="monthSelect">Reporting Month</label>
-                <select name="month" id="monthSelect">
-                  {% for number, name in months %}
-                    <option value="{{ number }}" {% if number == current_month %}selected{% endif %}>{{ name }}</option>
-                  {% endfor %}
-                </select>
-              </div>
-              <div>
-                <label for="yearInput">Reporting Year</label>
-                <input type="number" name="year" id="yearInput" value="{{ current_year }}" min="2020" max="2100" required>
-              </div>
-            </div>
-          </div>
-          <p class="hint">The generator creates 28, 29, 30, or 31 daily sheets automatically based on your selected month.</p>
-
-          <h3 style="margin-top: 2rem;">Daily Targets</h3>
-          <div class="two-col">
-            <div>
-              <p class="hint">Commodity daily wagon targets:</p>
-              {% include 'target_table.html' with context %}
-            </div>
-            <div>
-              <p class="hint">Division daily wagon targets:</p>
-              <table>
-                <thead>
-                  <tr><th>Division</th><th>Daily target</th></tr>
-                </thead>
-                <tbody>
-                  {% for item in divisions %}
-                    <tr>
-                      <td><strong>{{ item }}</strong></td>
-                      <td><input name="division_target_{{ loop.index0 }}" type="number" min="0" step="any" value="{{ defaults.division_targets[loop.index0] }}"></td>
-                    </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div class="wizard-nav">
-            <button type="button" class="btn btn-primary btn-next">Next Step &rarr;</button>
-          </div>
-        </div>
-
-        <!-- Step 2 -->
-        <div class="wizard-step" data-step="2" style="display:none;">
-          <h2>Step 2 of 5: Current FY Opening Balances</h2>
-          <p class="hint">Enter cumulative loading through the final day of the month before the selected reporting month.</p>
-          
-          {% set prefix = 'current' %}
-          {% include 'baseline_tables.html' %}
-
-          <div class="wizard-nav">
-            <button type="button" class="btn btn-secondary btn-prev">&larr; Previous</button>
-            <button type="button" class="btn btn-primary btn-next">Next Step &rarr;</button>
-          </div>
-        </div>
-
-        <!-- Step 3 -->
-        <div class="wizard-step" data-step="3" style="display:none;">
-          <h2>Step 3 of 5: Prior-Year FY Opening Balances</h2>
-          <p class="hint">Enter cumulative loading through the equivalent prior-year month-end. These figures support FY comparison averages.</p>
-          
-          <div class="form-group compact" style="margin-bottom: 1.5rem;">
-            <label for="priorFiscalDays">Prior-year fiscal days completed</label>
-            <input name="prior_fiscal_days" id="priorFiscalDays" type="number" min="0" value="0">
-          </div>
-
-          {% set prefix = 'prior' %}
-          {% include 'baseline_tables.html' %}
-
-          <div class="wizard-nav">
-            <button type="button" class="btn btn-secondary btn-prev">&larr; Previous</button>
-            <button type="button" class="btn btn-primary btn-next">Next Step &rarr;</button>
-          </div>
-        </div>
-
-        <!-- Step 4 -->
-        <div class="wizard-step" data-step="4" style="display:none;">
-          <h2>Step 4 of 5: Prior-Year Full-Year Daily Averages</h2>
-          <p class="hint">These appear in the existing “Last Year Upto 31st March” column.</p>
-          
-          {% set prefix = 'prior_full' %}
-          {% include 'baseline_tables.html' %}
-
-          <div class="wizard-nav">
-            <button type="button" class="btn btn-secondary btn-prev">&larr; Previous</button>
-            <button type="button" class="btn btn-primary btn-next">Next Step &rarr;</button>
-          </div>
-        </div>
-
-        <!-- Step 5 -->
-        <div class="wizard-step" data-step="5" style="display:none;">
-          <h2>Step 5 of 5: Prior-Year Daily Loading</h2>
-          <p class="hint">Paste the comparable month’s values into these grids. Leave days beyond the selected month blank.</p>
-          
-          {% set grid_prefix = 'prior_daily_commodity' %}{% set labels = commodities %}{% include 'daily_grid.html' %}
-          {% set grid_prefix = 'prior_daily_division' %}{% set labels = divisions %}{% include 'daily_grid.html' %}
-
-          <div class="wizard-nav">
-            <button type="button" class="btn btn-secondary btn-prev">&larr; Previous</button>
-            <button type="submit" class="btn btn-success generate-btn" id="generateBtn">
-              <span class="loading" id="generateSpinner" style="display:none;"></span>
-              Generate Offline Workbook
-            </button>
-          </div>
-        </div>
-      </form>
-    </div>
-  </main>
-
-  <script>
-    document.addEventListener("DOMContentLoaded", function() {
-        let currentStep = 1;
-        const totalSteps = 5;
-        const form = document.getElementById('wizardForm');
-        const generateBtn = document.getElementById('generateBtn');
-        const generateSpinner = document.getElementById('generateSpinner');
-
-        function showStep(step) {
-            document.querySelectorAll('.wizard-step').forEach(el => {
-                el.style.display = 'none';
-                el.classList.remove('active');
-            });
-            const activeStep = document.querySelector(`.wizard-step[data-step="${step}"]`);
-            if (activeStep) {
-                activeStep.style.display = 'block';
-                void activeStep.offsetWidth;
-                activeStep.classList.add('active');
-            }
-
-            document.querySelectorAll('.step-item').forEach(el => {
-                const s = parseInt(el.dataset.step);
-                el.classList.remove('current-step', 'completed');
-                if (s === step) {
-                    el.classList.add('current-step');
-                } else if (s < step) {
-                    el.classList.add('completed');
-                }
-            });
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GM Mini Data Entry</title>
+    <style>
+        :root {
+            --color-text: #0b0c0c;
+            --color-bg: #ffffff;
+            --color-action: #1d70b8;
+            --color-action-hover: #144e75;
+            --color-error: #ca3535;
+            --color-success: #0f7a52;
+            --color-border: #b1b4b6;
+            --color-muted-bg: #f3f2f1;
+            --font-size-base: 19px;
+            --line-height-base: 1.5;
+            --font-stack: "Segoe UI", Arial, "Helvetica Neue", system-ui, sans-serif;
         }
 
-        document.querySelectorAll('.btn-next').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const currentStepEl = document.querySelector(`.wizard-step[data-step="${currentStep}"]`);
-                const inputs = currentStepEl.querySelectorAll('input, select');
-                let valid = true;
-                for (let input of inputs) {
-                    if (!input.checkValidity()) {
-                        input.reportValidity();
-                        valid = false;
-                        break;
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--font-stack);
+            font-size: var(--font-size-base);
+            line-height: var(--line-height-base);
+            color: var(--color-text);
+            background-color: var(--color-bg);
+        }
+
+        header {
+            background: var(--color-text);
+            color: white;
+            padding: 1rem 0;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 2rem;
+            font-weight: 700;
+        }
+
+        main {
+            max-width: 900px;
+            margin: 1rem auto;
+            padding: 0 1rem;
+        }
+
+        .container {
+            background: var(--color-bg);
+            padding: 1.25rem;
+            border: 1px solid var(--color-border);
+        }
+
+        h2 {
+            color: var(--color-text);
+            margin-bottom: 0.75rem;
+            font-size: 1.75rem;
+            font-weight: 700;
+        }
+
+        .messages {
+            margin-bottom: 1.5rem;
+        }
+
+        .message {
+            padding: 1rem;
+            margin-bottom: 0.5rem;
+            border: 2px solid var(--color-success);
+            border-left-width: 6px;
+            background-color: var(--color-bg);
+            color: var(--color-text);
+            font-weight: 600;
+        }
+
+        .message.error {
+            border-color: var(--color-error);
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 700;
+            color: var(--color-text);
+        }
+
+        input[type="date"], input[type="number"] {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid var(--color-border);
+            background-color: var(--color-bg);
+            font-size: 1rem;
+        }
+
+        input[type="date"]:hover, input[type="number"]:hover {
+            border-color: var(--color-action);
+        }
+        
+        input[type="date"]:focus, input[type="number"]:focus {
+            outline: 3px solid var(--color-action);
+            outline-offset: 0;
+            border-color: var(--color-action);
+        }
+
+        .btn {
+            display: inline-block;
+            min-height: 48px;
+            padding: 0.75rem 2rem;
+            background: var(--color-action);
+            color: white;
+            text-decoration: none;
+            border: 2px solid var(--color-action);
+            border-radius: 0;
+            cursor: pointer;
+            font-size: 1.1rem;
+            font-weight: 700;
+            text-align: center;
+            line-height: 1.4;
+            width: 100%;
+            margin-top: 2rem;
+        }
+
+        .btn:hover {
+            background: var(--color-action-hover);
+            border-color: var(--color-action-hover);
+        }
+
+        .instructions {
+            background-color: var(--color-muted-bg);
+            border: 1px solid var(--color-border);
+            padding: 1.5rem;
+            margin-top: 2rem;
+        }
+
+        .instructions h3 {
+            color: var(--color-text);
+            margin-bottom: 1rem;
+        }
+
+        .classification-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin: 0.75rem 0;
+        }
+
+        .current-classifications {
+            background: var(--color-muted-bg);
+            padding: 1rem;
+            border: 1px solid var(--color-border);
+        }
+
+        .classification-list {
+            overflow-y: auto;
+            border: 1px solid var(--color-border);
+            background: var(--color-bg);
+            padding: 0.5rem;
+            width: 100%;
+        }
+
+        .classification-item {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr;
+            align-items: center;
+            padding: 0.5rem;
+            line-height: 1.2;
+            border-bottom: 1px solid var(--color-muted-bg);
+            gap: 10px;
+        }
+        
+        .classification-item label {
+            margin-bottom: 0;
+        }
+
+        .classification-item:last-child {
+            border-bottom: none;
+        }
+        
+        .form-header {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr;
+            gap: 10px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            padding: 0 0.5rem;
+        }
+
+        @media (max-width: 768px) {
+            header h1 {
+                font-size: 1.5rem;
+            }
+            .classification-section {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(255, 255, 255, 0.9);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            flex-direction: column;
+            color: var(--color-text);
+            font-weight: bold;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 5px solid var(--color-muted-bg);
+            border-top: 5px solid var(--color-action);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+        
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>GM Mini Portal</h1>
+    </header>
+
+    <main>
+        <div class="container">
+            {% with messages = get_flashed_messages() %}
+                {% if messages %}
+                    <div class="messages">
+                        {% for message in messages %}
+                            <div class="message error">{{ message }}</div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+
+            <h2>Daily Loading Performance</h2>
+            <p style="margin-bottom: 1.5rem;">Enter today's loading performance metrics. Everything else is automated.</p>
+
+            <form action="/generate" method="POST" id="mainForm">
+                <div class="instructions form-group">
+                    <label for="report_date">Report Date</label>
+                    <input type="date" id="report_date" name="report_date" required>
+                </div>
+
+                <div class="classification-section">
+                    <div class="current-classifications">
+                        <h3>Commodities</h3>
+                        <div class="form-header">
+                            <span>Name</span>
+                            <span>Rakes</span>
+                            <span>Wagons</span>
+                        </div>
+                        <div class="classification-list">
+                            {% for c in commodities %}
+                            <div class="classification-item">
+                                <label>{{ c }}</label>
+                                <input type="number" step="any" name="{{ c }}_rakes" placeholder="0">
+                                <input type="number" step="any" name="{{ c }}_wagons" placeholder="0">
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="current-classifications">
+                        <h3>Divisions</h3>
+                        <div class="form-header">
+                            <span>Name</span>
+                            <span>Rakes</span>
+                            <span>Wagons</span>
+                        </div>
+                        <div class="classification-list">
+                            {% for d in divisions %}
+                            <div class="classification-item">
+                                <label>{{ d }}</label>
+                                <input type="number" step="any" name="{{ d }}_rakes" placeholder="0">
+                                <input type="number" step="any" name="{{ d }}_wagons" placeholder="0">
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn" id="submitBtn">Generate & Save Report</button>
+            </form>
+        </div>
+    </main>
+    
+    <div class="overlay" id="loader">
+        <div class="loading"></div>
+        <h2>Syncing with Database & Generating Excel...</h2>
+        <p>This usually takes about 10 seconds.</p>
+    </div>
+
+    <script>
+        document.getElementById('report_date').value = "2026-04-01";
+        
+        function showLoader() {
+            document.getElementById('loader').style.display = 'flex';
+            setTimeout(() => {
+                document.getElementById('loader').style.display = 'none';
+            }, 15000);
+        }
+
+        document.getElementById('mainForm').addEventListener('submit', async function(e) {
+            e.preventDefault(); // Stop normal form submission temporarily
+            
+            const dateStr = document.getElementById('report_date').value;
+            if (!dateStr) return;
+            
+            const formData = new FormData();
+            formData.append('report_date', dateStr);
+            
+            try {
+                const btn = document.getElementById('submitBtn');
+                const originalText = btn.innerText;
+                btn.innerText = "Checking...";
+                btn.disabled = true;
+
+                const response = await fetch('/api/check_date', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+                
+                btn.innerText = originalText;
+                btn.disabled = false;
+                
+                if (result.status === 'error') {
+                    alert("Validation Error:\n\n" + result.message);
+                    return; // Abort submission entirely
+                } else if (result.status === 'warning') {
+                    const confirmed = confirm("Warning:\n\n" + result.message);
+                    if (!confirmed) {
+                        return; // Abort submission
                     }
+                    // If confirmed, add hidden force_overwrite input
+                    const hiddenField = document.createElement('input');
+                    hiddenField.type = 'hidden';
+                    hiddenField.name = 'force_overwrite';
+                    hiddenField.value = 'true';
+                    this.appendChild(hiddenField);
                 }
                 
-                if (valid && currentStep < totalSteps) {
-                    currentStep++;
-                    showStep(currentStep);
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                }
-            });
-        });
-
-        document.querySelectorAll('.btn-prev').forEach(btn => {
-            btn.addEventListener('click', () => {
-                if (currentStep > 1) {
-                    currentStep--;
-                    showStep(currentStep);
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                }
-            });
-        });
-        
-        document.querySelectorAll('.step-item').forEach(item => {
-            item.addEventListener('click', () => {
-                const targetStep = parseInt(item.dataset.step);
-                currentStep = targetStep;
-                showStep(currentStep);
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-            });
-        });
-
-        form.addEventListener('submit', function() {
-            if (generateSpinner) {
-                generateSpinner.style.display = 'inline-block';
-            }
-            if (generateBtn) {
-                generateBtn.classList.add('disabled');
+                // Validation passed or warning confirmed, now actually submit!
+                showLoader();
+                this.submit();
+                
+            } catch (err) {
+                console.error(err);
+                alert("Failed to validate date with server. Check connection.");
+                
+                const btn = document.getElementById('submitBtn');
+                btn.innerText = "Generate & Save Report";
+                btn.disabled = false;
             }
         });
-
-        showStep(currentStep);
-    });
-  </script>
+    </script>
 </body>
 </html>
