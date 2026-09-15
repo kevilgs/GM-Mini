@@ -276,6 +276,39 @@ class TestCalculator(unittest.TestCase):
         self.assertEqual(div_cumms['ADI_GIMB']['cur'], 250.0, "ADI (100) + GIMB (150) must combine to 250")
         self.assertEqual(div_cumms['BVC']['cur'], 60.0, "BVC must receive Bhavnagar BVP (60) data")
 
+    def test_leap_year_fiscal_day_counts(self):
+        """Verify fiscal day counts in leap year FY 2027-28 (where 2028 is a leap year):
+        - Feb 28, 2028 -> day 334
+        - Feb 29, 2028 -> day 335
+        - March 1, 2028 -> day 336 (because Feb has 29 days)
+        - March 31, 2028 -> day 366 (total leap FY days)
+        """
+        # FY 2027-28 starts in 2027, and Feb 2028 is a leap year
+        self.assertEqual(self.calc._get_fiscal_day_count(2, 28, fy_start_year=2027), 334)
+        self.assertEqual(self.calc._get_fiscal_day_count(2, 29, fy_start_year=2027), 335)
+        self.assertEqual(self.calc._get_fiscal_day_count(3, 1, fy_start_year=2027), 336)
+        self.assertEqual(self.calc._get_fiscal_day_count(3, 31, fy_start_year=2027), 366)
+
+    def test_leap_year_whole_month_and_full_year_avg(self):
+        """Verify that February whole month average correctly divides by 29 for a leap year,
+        and full year average divides by 366.
+        """
+        # Prior year is FY 2027-28, which has Feb 2028 (29 days)
+        # Populate 2900 wagons across 29 days of Feb 2028 -> avg should be 100.0 (2900 / 29)
+        mock_data = {
+            ('FY 2027-28', 'commodity', 'CEMT', 2): [100.0] * 29,
+        }
+        db = MockGSheetsDB(mock_data)
+        calc = Calculator(db)
+
+        # Generating report for current year FY 2028-29, month 2 (Feb), day 1
+        daily_input = {'CEMT': {'rakes': 2.0, 'wagons': 100.0}}
+        report = calc.calculate_daily_report('FY 2028-29', 'FY 2027-28', 2, 1, daily_input)
+
+        cemt = report['commodity']['CEMT']
+        # ly_whole_month_avg = 2900 / 29 = 100.0 (not 2900 / 28 = 103.57)
+        self.assertEqual(cemt['ly_whole_month_avg'], 100.0)
+
 
 if __name__ == '__main__':
     unittest.main()

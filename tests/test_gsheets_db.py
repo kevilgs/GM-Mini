@@ -6,7 +6,8 @@ from core.gsheets_db import (
     CATEGORY_COLS,
     COMMODITIES,
     DIVISIONS,
-    MONTH_DAYS
+    MONTH_DAYS,
+    get_month_days
 )
 
 class TestGSheetsDBLogic(unittest.TestCase):
@@ -54,6 +55,15 @@ class TestGSheetsDBLogic(unittest.TestCase):
         self.assertEqual(MONTH_DAYS[1], 31)  # January
         self.assertEqual(MONTH_DAYS[2], 28)  # February
         self.assertEqual(MONTH_DAYS[3], 31)  # March
+
+    def test_dynamic_get_month_days_leap_year(self):
+        """Verify get_month_days dynamically returns 29 for February in leap years and 28 otherwise."""
+        self.assertEqual(get_month_days(2028, 2), 29, "February 2028 is a leap year (29 days)")
+        self.assertEqual(get_month_days(2024, 2), 29, "February 2024 is a leap year (29 days)")
+        self.assertEqual(get_month_days(2026, 2), 28, "February 2026 is a normal year (28 days)")
+        self.assertEqual(get_month_days(2027, 2), 28, "February 2027 is a normal year (28 days)")
+        self.assertEqual(get_month_days(2026, 4), 30, "April has 30 days")
+        self.assertEqual(get_month_days(2026, 5), 31, "May has 31 days")
 
     def test_get_row_for_date(self):
         """Verify finding the correct row index given DD-MM-YYYY."""

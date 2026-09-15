@@ -1,6 +1,7 @@
 import gspread
 from google.oauth2.service_account import Credentials
 import datetime
+import calendar
 
 # Define column indices for the new 1-row-per-day layout (0-indexed in python list)
 # Date is 0
@@ -14,10 +15,14 @@ CATEGORY_COLS = {
 COMMODITIES = ['CEMT', 'COAL', 'CONT', 'FERT', 'IMFT', 'POL', 'SALT', 'STEEL', 'DOC', 'FG', 'CHEM', 'AUTO', 'OTHERS']
 DIVISIONS = ['ADI', 'GIMB', 'BCT', 'BRC', 'RJT', 'BVP', 'RTM']
 
-# The number of days in each month
+# Default non-leap year days in each month for backward compatibility
 MONTH_DAYS = {
     4: 30, 5: 31, 6: 30, 7: 31, 8: 31, 9: 30, 10: 31, 11: 30, 12: 31, 1: 31, 2: 28, 3: 31
 }
+
+def get_month_days(year: int, month: int) -> int:
+    """Returns the exact number of days in the given month and year, handling leap years dynamically."""
+    return calendar.monthrange(year, month)[1]
 
 class GSheetsDB:
     def __init__(self, credentials_path='credentials.json', spreadsheet_name='GM-Mini-Database'):

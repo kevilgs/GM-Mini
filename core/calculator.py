@@ -1,5 +1,6 @@
-from core.gsheets_db import GSheetsDB, COMMODITIES, DIVISIONS, MONTH_DAYS
+from core.gsheets_db import GSheetsDB, COMMODITIES, DIVISIONS, MONTH_DAYS, get_month_days
 import datetime
+import calendar
 
 class Calculator:
     def __init__(self, db: GSheetsDB):
@@ -18,7 +19,11 @@ class Calculator:
             'division': {}
         }
         
-        fiscal_day_count = self._get_fiscal_day_count(month, day)
+        # Determine starting calendar years of current and prior financial years
+        fy_start_year = int(current_year_tab.split('-')[0].replace("FY ", ""))
+        prior_start_year = int(prior_year_tab.split('-')[0].replace("FY ", ""))
+        
+        fiscal_day_count = self._get_fiscal_day_count(month, day, fy_start_year=fy_start_year)
         
         for category, items in [('commodity', COMMODITIES), ('division', DIVISIONS)]:
             for name in items:
@@ -48,9 +53,11 @@ class Calculator:
                 diff_avg = cur_mtd_avg - ly_mtd_avg
                 
                 # 6. Last Year Whole Month Avg
-                # (Sum of all days in that month last year / max days)
+                # (Sum of all days in that month last year / days in that specific month)
                 ly_whole_month_sum = self.db.get_month_sum(prior_year_tab, category, name, month)
-                ly_whole_month_avg = ly_whole_month_sum / MONTH_DAYS[month]
+                prior_cal_year = prior_start_year if month >= 4 else prior_start_year + 1
+                ly_days_in_month = get_month_days(prior_cal_year, month)
+                ly_whole_month_avg = ly_whole_month_sum / ly_days_in_month
                 
                 # 7. Diff in Avg (Current MTD vs Last Year Whole Month)
                 diff_whole_month_avg = cur_mtd_avg - ly_whole_month_avg
@@ -73,7 +80,9 @@ class Calculator:
                 
                 # 10. Last Year Upto 31st March (Full Year Avg)
                 ly_full_year_sum = self.db.get_fy_progressive_sum(prior_year_tab, category, name, 3, 31)
-                ly_full_year_avg = ly_full_year_sum / 365
+                # In Indian FY, February falls in prior_start_year + 1
+                ly_total_days = 366 if calendar.isleap(prior_start_year + 1) else 365
+                ly_full_year_avg = ly_full_year_sum / ly_total_days
                 
                 report_data[category][name] = {
                     'rakes': cur_rakes,
@@ -170,8 +179,8 @@ class Calculator:
         
         return report_data
         
-    def _get_fiscal_day_count(self, month, day):
-        # Calculate days since April 1st
+    def _get_fiscal_day_count(self, month, day, fy_start_year=None):
+        # Calculate days since April 1st, accounting for leap years when fy_start_year is known
         months_order = [4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3]
         total_days = 0
         for m in months_order:
@@ -179,7 +188,11 @@ class Calculator:
                 total_days += day
                 break
             else:
-                total_days += MONTH_DAYS[m]
+                if fy_start_year:
+                    m_year = fy_start_year if m >= 4 else fy_start_year + 1
+                    total_days += get_month_days(m_year, m)
+                else:
+                    total_days += MONTH_DAYS[m]
         return total_days
 
 if __name__ == "__main__":
