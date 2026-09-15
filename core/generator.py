@@ -87,7 +87,8 @@ def generate_daily_excel(month: int, year: int, day: int, report_data: dict, tem
         ws.cell(row=row, column=10).value = data['diff_whole_month_avg'] # J
         ws.cell(row=row, column=11).value = data['cur_fy_avg']    # K
         ws.cell(row=row, column=12).value = data['ly_fy_avg']     # L
-        ws.cell(row=row, column=13).value = data['ly_full_year_avg'] # M
+        if data['ly_full_year_avg'] > 0:
+            ws.cell(row=row, column=13).value = data['ly_full_year_avg'] # M
 
     # Process Divisions
     for name, data in report_data['division'].items():
@@ -102,34 +103,90 @@ def generate_daily_excel(month: int, year: int, day: int, report_data: dict, tem
         ws.cell(row=row, column=10).value = data['diff_whole_month_avg'] # J
         ws.cell(row=row, column=11).value = data['cur_fy_avg']    # K
         ws.cell(row=row, column=12).value = data['ly_fy_avg']     # L
-        ws.cell(row=row, column=13).value = data['ly_full_year_avg'] # M
+        if data['ly_full_year_avg'] > 0:
+            ws.cell(row=row, column=13).value = data['ly_full_year_avg'] # M
         
-    # Calculate Totals
-    # Openpyxl doesn't evaluate formulas immediately, so we can write sum formulas
-    # or calculate the sums in Python. We will write formulas for the totals.
-    ws.cell(row=18, column=3).value = "=SUM(C5:C17)"
-    ws.cell(row=18, column=4).value = "=SUM(D5:D17)"
-    ws.cell(row=18, column=5).value = "=SUM(E5:E17)"
-    ws.cell(row=18, column=6).value = "=SUM(F5:F17)"
-    ws.cell(row=18, column=7).value = "=SUM(G5:G17)"
-    ws.cell(row=18, column=8).value = "=SUM(H5:H17)"
-    ws.cell(row=18, column=9).value = "=SUM(I5:I17)"
-    ws.cell(row=18, column=10).value = "=SUM(J5:J17)"
-    ws.cell(row=18, column=11).value = "=SUM(K5:K17)"
-    ws.cell(row=18, column=12).value = "=SUM(L5:L17)"
-    ws.cell(row=18, column=13).value = "=SUM(M5:M17)"
-    
-    ws.cell(row=28, column=3).value = "=SUM(C21:C27)"
-    ws.cell(row=28, column=4).value = "=SUM(D21:D27)"
-    ws.cell(row=28, column=5).value = "=SUM(E21:E27)"
-    ws.cell(row=28, column=6).value = "=SUM(F21:F27)"
-    ws.cell(row=28, column=7).value = "=SUM(G21:G27)"
-    ws.cell(row=28, column=8).value = "=SUM(H21:H27)"
-    ws.cell(row=28, column=9).value = "=SUM(I21:I27)"
-    ws.cell(row=28, column=10).value = "=SUM(J21:J27)"
-    ws.cell(row=28, column=11).value = "=SUM(K21:K27)"
-    ws.cell(row=28, column=12).value = "=SUM(L21:L27)"
-    ws.cell(row=28, column=13).value = "=SUM(M21:M27)"
+    # Calculate Totals for Tables
+    for col in range(3, 14):
+        col_letter = openpyxl.utils.get_column_letter(col)
+        ws.cell(row=18, column=col).value = f"=SUM({col_letter}5:{col_letter}17)"
+        ws.cell(row=28, column=col).value = f"=SUM({col_letter}21:{col_letter}27)"
+
+    # --- Inject Dynamic Right-Hand Panel Metrics ---
+    summary = report_data.get('summary', {})
+    if summary:
+        # Row 4 Year Labels
+        ws.cell(row=4, column=16).value = prev_fy_str  # P4
+        ws.cell(row=4, column=17).value = fy_str       # Q4
+        ws.cell(row=4, column=18).value = prev_fy_str  # R4
+        ws.cell(row=4, column=19).value = fy_str       # S4
+
+        # Row 6: Progressive Loading Up To Last Month
+        ws.cell(row=6, column=16).value = summary.get('ly_prev_months_wagons', 0.0)  # P6
+        ws.cell(row=6, column=17).value = summary.get('cur_prev_months_wagons', 0.0) # Q6
+        ws.cell(row=6, column=18).value = summary.get('ly_prev_months_mt', 0.0)      # R6
+        ws.cell(row=6, column=19).value = summary.get('cur_prev_months_mt', 0.0)      # S6
+
+        # Row 7: Today's Loading
+        ws.cell(row=7, column=16).value = summary.get('ly_today_wagons', 0.0)         # P7
+        ws.cell(row=7, column=17).value = summary.get('cur_today_wagons', 0.0)        # Q7
+        ws.cell(row=7, column=18).value = summary.get('ly_today_mt', 0.0)             # R7
+        ws.cell(row=7, column=19).value = summary.get('cur_today_mt', 0.0)             # S7
+
+        # Row 8: Current Month Loading Till Date
+        ws.cell(row=8, column=16).value = summary.get('ly_mtd_wagons', 0.0)           # P8
+        ws.cell(row=8, column=17).value = summary.get('cur_mtd_wagons', 0.0)          # Q8
+        ws.cell(row=8, column=18).value = summary.get('ly_mtd_mt', 0.0)               # R8
+        ws.cell(row=8, column=19).value = summary.get('cur_mtd_mt', 0.0)               # S8
+
+        # Rows 10-15: Division-Wise Cumulative Loading
+        div_cumms = summary.get('div_cumms', {})
+        div_rows = {
+            'ADI_GIMB': 10,
+            'BCT': 11,
+            'BRC': 12,
+            'RJT': 13,
+            'BVC': 14,
+            'RTM': 15
+        }
+        for div_key, r in div_rows.items():
+            c_data = div_cumms.get(div_key, {'cur': 0.0, 'ly': 0.0})
+            ws.cell(row=r, column=16).value = c_data['ly']  # P
+            ws.cell(row=r, column=17).value = c_data['cur'] # Q
+            # Convert cumulative wagons to MT (~55 tonnes/wagon)
+            ly_mt = round((c_data['ly'] * 55.0) / 1_000_000, 2)
+            cur_mt = round((c_data['cur'] * 55.0) / 1_000_000, 2)
+            ws.cell(row=r, column=18).value = ly_mt         # R
+            ws.cell(row=r, column=19).value = cur_mt        # S
+
+        # Row 16: Progressive LDG from April
+        ws.cell(row=16, column=16).value = summary.get('ly_fy_prog_wagons', 0.0)      # P16
+        ws.cell(row=16, column=17).value = summary.get('cur_fy_prog_wagons', 0.0)     # Q16
+        ws.cell(row=16, column=18).value = "=SUM(R10:R15)"
+        ws.cell(row=16, column=19).value = "=SUM(S10:S15)"
+
+        # Row 17: To Achieve Target
+        target_wagons = ws.cell(row=5, column=17).value
+        try:
+            target_wagons_num = float(target_wagons)
+        except (ValueError, TypeError):
+            target_wagons_num = 2208615.0
+            
+        cur_prog = summary.get('cur_fy_prog_wagons', 0.0)
+        ws.cell(row=17, column=17).value = round(target_wagons_num - cur_prog, 2)    # Q17
+        ws.cell(row=17, column=19).value = "=+S5-S16"                                # S17
+
+        # Clear hardcoded August rake stock numbers (Rows 21-27)
+        for sr in range(21, 28):
+            ws.cell(row=sr, column=16).value = 0 # P
+            ws.cell(row=sr, column=18).value = 0 # R
+        ws.cell(row=28, column=16).value = "=SUM(P21:P27)"
+        ws.cell(row=28, column=18).value = "=SUM(R21:R27)"
+
+    # Enable full automatic calculation on workbook open
+    wb.calculation.fullCalcOnLoad = True
+    wb.calculation.forceFullCalc = True
+    wb.calculation.calcMode = "auto"
         
     wb.save(output_path)
     wb.close()

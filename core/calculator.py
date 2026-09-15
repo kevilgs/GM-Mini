@@ -88,7 +88,86 @@ class Calculator:
                     'ly_fy_avg': round(ly_fy_avg, 2),
                     'ly_full_year_avg': round(ly_full_year_avg, 2)
                 }
-                
+
+        # --- Calculate Right-Hand Summary Panel Metrics ---
+        # 1. Today Totals
+        cur_today_wagons = sum(float(daily_input.get(d, {}).get('wagons', 0.0)) for d in DIVISIONS)
+        cur_today_rakes = sum(float(daily_input.get(d, {}).get('rakes', 0.0)) for d in DIVISIONS)
+        ly_today_wagons = sum(report_data['division'][d]['ly_wagons'] for d in DIVISIONS)
+
+        # 2. Month-To-Date Totals
+        cur_mtd_wagons = sum(report_data['division'][d]['cur_mtd_avg'] * day for d in DIVISIONS)
+        ly_mtd_wagons = sum(report_data['division'][d]['ly_mtd_avg'] * day for d in DIVISIONS)
+
+        # 3. Progressive Loading Up To Last Month (within the financial year)
+        # For April (month 4), there are 0 prior months in the new FY
+        cur_prev_months_wagons = 0.0
+        ly_prev_months_wagons = 0.0
+        months_order = [4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3]
+        for m in months_order:
+            if m == month:
+                break
+            cur_prev_months_wagons += sum(self.db.get_month_sum(current_year_tab, 'division', d, m) for d in DIVISIONS)
+            ly_prev_months_wagons += sum(self.db.get_month_sum(prior_year_tab, 'division', d, m) for d in DIVISIONS)
+
+        # 4. Division-Wise Cumulative Loading from April 1 to Today
+        div_cumms = {}
+        for d in DIVISIONS:
+            cur_d_cum = 0.0
+            for m in months_order:
+                if m == month:
+                    if day > 1:
+                        cur_d_cum += self.db.get_month_sum(current_year_tab, 'division', d, m, up_to_day=day-1)
+                    cur_d_cum += float(daily_input.get(d, {}).get('wagons', 0.0))
+                    break
+                else:
+                    cur_d_cum += self.db.get_month_sum(current_year_tab, 'division', d, m)
+
+            ly_d_cum = self.db.get_fy_progressive_sum(prior_year_tab, 'division', d, month, day)
+            div_cumms[d] = {'cur': cur_d_cum, 'ly': ly_d_cum}
+
+        # ADI in GM MINI right panel combines ADI + GIMB
+        adi_gimb_cur = div_cumms['ADI']['cur'] + div_cumms['GIMB']['cur']
+        adi_gimb_ly = div_cumms['ADI']['ly'] + div_cumms['GIMB']['ly']
+
+        cur_fy_prog_wagons = cur_prev_months_wagons + cur_mtd_wagons
+        ly_fy_prog_wagons = ly_prev_months_wagons + ly_mtd_wagons
+
+        # Million Tonnes: ~50-55 tonnes per wagon standard railway conversion
+        tonnes_per_wagon = 55.0
+        cur_today_mt = round((cur_today_wagons * tonnes_per_wagon) / 1_000_000, 2)
+        ly_today_mt = round((ly_today_wagons * tonnes_per_wagon) / 1_000_000, 2)
+        cur_mtd_mt = round((cur_mtd_wagons * tonnes_per_wagon) / 1_000_000, 2)
+        ly_mtd_mt = round((ly_mtd_wagons * tonnes_per_wagon) / 1_000_000, 2)
+        cur_prev_months_mt = round((cur_prev_months_wagons * tonnes_per_wagon) / 1_000_000, 2)
+        ly_prev_months_mt = round((ly_prev_months_wagons * tonnes_per_wagon) / 1_000_000, 2)
+
+        report_data['summary'] = {
+            'cur_today_wagons': cur_today_wagons,
+            'cur_today_rakes': cur_today_rakes,
+            'ly_today_wagons': ly_today_wagons,
+            'cur_today_mt': cur_today_mt,
+            'ly_today_mt': ly_today_mt,
+            'cur_mtd_wagons': cur_mtd_wagons,
+            'ly_mtd_wagons': ly_mtd_wagons,
+            'cur_mtd_mt': cur_mtd_mt,
+            'ly_mtd_mt': ly_mtd_mt,
+            'cur_prev_months_wagons': cur_prev_months_wagons,
+            'ly_prev_months_wagons': ly_prev_months_wagons,
+            'cur_prev_months_mt': cur_prev_months_mt,
+            'ly_prev_months_mt': ly_prev_months_mt,
+            'cur_fy_prog_wagons': cur_fy_prog_wagons,
+            'ly_fy_prog_wagons': ly_fy_prog_wagons,
+            'div_cumms': {
+                'ADI_GIMB': {'cur': adi_gimb_cur, 'ly': adi_gimb_ly},
+                'BCT': div_cumms['BCT'],
+                'BRC': div_cumms['BRC'],
+                'RJT': div_cumms['RJT'],
+                'BVC': div_cumms['BVP'],
+                'RTM': div_cumms['RTM'],
+            }
+        }
+        
         return report_data
         
     def _get_fiscal_day_count(self, month, day):
